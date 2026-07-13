@@ -20,7 +20,11 @@ DEFAULT_MODEL = "openai/gpt-oss-120b:free"
 # can be temporarily saturated upstream regardless of your own usage — seen
 # in practice on gpt-oss-120b:free during a 20-listing backfill. Falls back
 # to a different free model rather than failing outright.
-FALLBACK_MODELS = ["qwen/qwen3-next-80b-a3b-instruct:free"]
+FALLBACK_MODELS = [
+    "qwen/qwen3-next-80b-a3b-instruct:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "meta-llama/llama-3.2-3b-instruct:free",
+]
 
 PROMPT_TEMPLATE = """THE HomeShare facilitates homesharing arrangements, which are made up of two parties ( a sharer- a younger person (21 yo min) who needs an accommodation and needs to provide 10 hours per week of companionship and support. The older person, the householder, needs to live in their own house with some extra help from the sharer. so it's a mutually beneficial arrangement where everybody wins.
 Consider this Instagram listing:
@@ -50,8 +54,25 @@ Description:
 
 
 RETRY_STATUS_CODES = {429, 502, 503}
-MAX_ATTEMPTS_PER_MODEL = 4
-RETRY_BACKOFF_SECONDS = 10
+MAX_ATTEMPTS_PER_MODEL = 6
+DEFAULT_BACKOFF_SECONDS = 10
+MAX_BACKOFF_SECONDS = 30
+
+
+def _retry_wait_seconds(response, attempt):
+    """Prefer the server's own Retry-After guidance over a blind guess."""
+    header_value = response.headers.get("Retry-After")
+    if header_value:
+        try:
+            return min(float(header_value), MAX_BACKOFF_SECONDS)
+        except ValueError:
+            pass
+    try:
+        metadata_wait = response.json()["error"]["metadata"]["retry_after_seconds"]
+        return min(float(metadata_wait), MAX_BACKOFF_SECONDS)
+    except (ValueError, KeyError, TypeError):
+        pass
+    return min(DEFAULT_BACKOFF_SECONDS * attempt, MAX_BACKOFF_SECONDS)
 
 
 def _call_model(model, prompt, api_key):
@@ -78,7 +99,7 @@ def _call_model(model, prompt, api_key):
 
         last_error = f"OpenRouter API error {response.status_code} (model={model}): {response.text}"
         if response.status_code in RETRY_STATUS_CODES and attempt < MAX_ATTEMPTS_PER_MODEL:
-            wait = RETRY_BACKOFF_SECONDS * attempt
+            wait = _retry_wait_seconds(response, attempt)
             print(f"OpenRouter {response.status_code} on {model}, retrying in {wait}s (attempt {attempt}/{MAX_ATTEMPTS_PER_MODEL})")
             time.sleep(wait)
             continue
