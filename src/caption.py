@@ -7,6 +7,7 @@ a code change.
 """
 
 import os
+import time
 
 import requests
 
@@ -43,6 +44,11 @@ Description:
 """
 
 
+RETRY_STATUS_CODES = {429, 502, 503}
+MAX_ATTEMPTS = 4
+RETRY_BACKOFF_SECONDS = 5
+
+
 def generate_caption(listing):
     api_key = os.environ["OPENROUTER_API_KEY"]
     model = os.environ.get("OPENROUTER_MODEL") or DEFAULT_MODEL
@@ -54,22 +60,30 @@ def generate_caption(listing):
         description=listing["description"],
     )
 
-    response = requests.post(
-        OPENROUTER_URL,
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "HTTP-Referer": "https://github.com/raymcdhub/social-distribution-engine",
-            "X-Title": "THE HomeShare Social Distribution Engine",
-        },
-        json={
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.7,
-        },
-        timeout=60,
-    )
-    if not response.ok:
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        response = requests.post(
+            OPENROUTER_URL,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "HTTP-Referer": "https://github.com/raymcdhub/social-distribution-engine",
+                "X-Title": "THE HomeShare Social Distribution Engine",
+            },
+            json={
+                "model": model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.7,
+            },
+            timeout=60,
+        )
+        if response.ok:
+            return response.json()["choices"][0]["message"]["content"].strip()
+
+        if response.status_code in RETRY_STATUS_CODES and attempt < MAX_ATTEMPTS:
+            wait = RETRY_BACKOFF_SECONDS * attempt
+            print(f"OpenRouter {response.status_code}, retrying in {wait}s (attempt {attempt}/{MAX_ATTEMPTS})")
+            time.sleep(wait)
+            continue
+
         raise RuntimeError(
             f"OpenRouter API error {response.status_code} (model={model}): {response.text}"
         )
-    return response.json()["choices"][0]["message"]["content"].strip()
