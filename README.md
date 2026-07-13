@@ -47,10 +47,15 @@ Runs once daily, in this order so a listing removed today is never reposted toda
 ## Setup
 
 1. Add these repository secrets (Settings → Secrets and variables → Actions):
-   - `OPENROUTER_API_KEY` — from https://openrouter.ai/keys. The `meta-llama/llama-3.3-70b-instruct:free`
-     model used by default costs nothing, but is rate-limited on OpenRouter's free
-     tier; if you hit limits, swap the `MODEL` constant in `src/caption.py` for a
-     paid model.
+   - `OPENROUTER_API_KEY` — from https://openrouter.ai/keys. Defaults to
+     `openai/gpt-oss-120b:free` (set in `src/caption.py`). **Free OpenRouter models
+     are typically time-limited promotional listings, not permanent** — the original
+     choice (`meta-llama/llama-3.3-70b-instruct:free`) was retired in July 2026 after
+     a few weeks of use. When the current default is retired, either edit
+     `DEFAULT_MODEL` in `src/caption.py`, or set the optional repository **variable**
+     (Settings → Secrets and variables → Actions → *Variables* tab, not Secrets)
+     `OPENROUTER_MODEL` to override it without a code change. Check
+     https://openrouter.ai/models?max_price=0 for current free options.
    - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
    - `META_ACCESS_TOKEN` — long-lived Page access token with `instagram_basic`,
      `instagram_content_publish`, `pages_read_engagement`, `pages_manage_posts`.

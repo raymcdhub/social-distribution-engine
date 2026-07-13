@@ -1,11 +1,20 @@
-"""Social media caption generation via OpenRouter (Llama 3.3 70B, free tier)."""
+"""Social media caption generation via OpenRouter (free-tier model).
+
+Free-tier OpenRouter models are typically time-limited promotional listings
+from the underlying inference provider, not permanent — expect to swap
+DEFAULT_MODEL again in the future. Set OPENROUTER_MODEL to override without
+a code change.
+"""
 
 import os
 
 import requests
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = "meta-llama/llama-3.3-70b-instruct:free"
+# openai/gpt-oss-120b:free — OpenAI's own open-weight release rather than a
+# limited promotional checkpoint, chosen as a comparatively durable pick
+# after meta-llama/llama-3.3-70b-instruct:free was retired (July 2026).
+DEFAULT_MODEL = "openai/gpt-oss-120b:free"
 
 PROMPT_TEMPLATE = """THE HomeShare facilitates homesharing arrangements, which are made up of two parties ( a sharer- a younger person (21 yo min) who needs an accommodation and needs to provide 10 hours per week of companionship and support. The older person, the householder, needs to live in their own house with some extra help from the sharer. so it's a mutually beneficial arrangement where everybody wins.
 Consider this Instagram listing:
@@ -36,6 +45,7 @@ Description:
 
 def generate_caption(listing):
     api_key = os.environ["OPENROUTER_API_KEY"]
+    model = os.environ.get("OPENROUTER_MODEL") or DEFAULT_MODEL
     prompt = PROMPT_TEMPLATE.format(
         title=listing["title"],
         location=listing["location"],
@@ -52,7 +62,7 @@ def generate_caption(listing):
             "X-Title": "THE HomeShare Social Distribution Engine",
         },
         json={
-            "model": MODEL,
+            "model": model,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.7,
         },
