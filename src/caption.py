@@ -16,6 +16,11 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 # limited promotional checkpoint, chosen as a comparatively durable pick
 # after meta-llama/llama-3.3-70b-instruct:free was retired (July 2026).
 DEFAULT_MODEL = "openai/gpt-oss-120b:free"
+# Free OpenRouter models share a global capacity pool per model, so a model
+# can be temporarily saturated upstream regardless of your own usage — seen
+# in practice on gpt-oss-120b:free during a 20-listing backfill. Falls back
+# to a different free model rather than failing outright.
+FALLBACK_MODELS = ["qwen/qwen3-next-80b-a3b-instruct:free"]
 
 PROMPT_TEMPLATE = """THE HomeShare facilitates homesharing arrangements, which are made up of two parties ( a sharer- a younger person (21 yo min) who needs an accommodation and needs to provide 10 hours per week of companionship and support. The older person, the householder, needs to live in their own house with some extra help from the sharer. so it's a mutually beneficial arrangement where everybody wins.
 Consider this Instagram listing:
@@ -45,22 +50,15 @@ Description:
 
 
 RETRY_STATUS_CODES = {429, 502, 503}
-MAX_ATTEMPTS = 4
-RETRY_BACKOFF_SECONDS = 5
+MAX_ATTEMPTS_PER_MODEL = 4
+RETRY_BACKOFF_SECONDS = 10
 
 
-def generate_caption(listing):
-    api_key = os.environ["OPENROUTER_API_KEY"]
-    model = os.environ.get("OPENROUTER_MODEL") or DEFAULT_MODEL
-    prompt = PROMPT_TEMPLATE.format(
-        title=listing["title"],
-        location=listing["location"],
-        programme=listing["programme"],
-        gender=listing["gender"],
-        description=listing["description"],
-    )
-
-    for attempt in range(1, MAX_ATTEMPTS + 1):
+def _call_model(model, prompt, api_key):
+    """Try one model with retries. Returns caption text, or None if this
+    model was exhausted (caller should try the next fallback model)."""
+    last_error = None
+    for attempt in range(1, MAX_ATTEMPTS_PER_MODEL + 1):
         response = requests.post(
             OPENROUTER_URL,
             headers={
@@ -78,12 +76,34 @@ def generate_caption(listing):
         if response.ok:
             return response.json()["choices"][0]["message"]["content"].strip()
 
-        if response.status_code in RETRY_STATUS_CODES and attempt < MAX_ATTEMPTS:
+        last_error = f"OpenRouter API error {response.status_code} (model={model}): {response.text}"
+        if response.status_code in RETRY_STATUS_CODES and attempt < MAX_ATTEMPTS_PER_MODEL:
             wait = RETRY_BACKOFF_SECONDS * attempt
-            print(f"OpenRouter {response.status_code}, retrying in {wait}s (attempt {attempt}/{MAX_ATTEMPTS})")
+            print(f"OpenRouter {response.status_code} on {model}, retrying in {wait}s (attempt {attempt}/{MAX_ATTEMPTS_PER_MODEL})")
             time.sleep(wait)
             continue
+        break
 
-        raise RuntimeError(
-            f"OpenRouter API error {response.status_code} (model={model}): {response.text}"
-        )
+    print(f"Giving up on {model}: {last_error}")
+    return None
+
+
+def generate_caption(listing):
+    api_key = os.environ["OPENROUTER_API_KEY"]
+    requested_model = os.environ.get("OPENROUTER_MODEL") or DEFAULT_MODEL
+    models_to_try = [requested_model] + [m for m in FALLBACK_MODELS if m != requested_model]
+
+    prompt = PROMPT_TEMPLATE.format(
+        title=listing["title"],
+        location=listing["location"],
+        programme=listing["programme"],
+        gender=listing["gender"],
+        description=listing["description"],
+    )
+
+    for model in models_to_try:
+        result = _call_model(model, prompt, api_key)
+        if result is not None:
+            return result
+
+    raise RuntimeError(f"All OpenRouter models exhausted: {models_to_try}")

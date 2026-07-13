@@ -29,7 +29,7 @@ import images
 import sanity_client
 
 STAGGER_DAYS = [4, 3, 2, 1]  # first bucket is due immediately, last in 3 days
-DELAY_BETWEEN_CALLS = 3  # seconds, to stay under OpenRouter's free-tier rate limit
+DELAY_BETWEEN_CALLS = 6  # seconds, to stay under OpenRouter's free-tier rate limit
 
 
 def main():
