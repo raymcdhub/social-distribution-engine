@@ -68,5 +68,8 @@ def generate_caption(listing):
         },
         timeout=60,
     )
-    response.raise_for_status()
+    if not response.ok:
+        raise RuntimeError(
+            f"OpenRouter API error {response.status_code} (model={model}): {response.text}"
+        )
     return response.json()["choices"][0]["message"]["content"].strip()

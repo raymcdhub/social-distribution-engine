@@ -13,6 +13,12 @@ def _access_token():
     return os.environ["META_ACCESS_TOKEN"]
 
 
+def _check(response):
+    if not response.ok:
+        raise RuntimeError(f"Meta Graph API error {response.status_code}: {response.text}")
+    return response
+
+
 def _wait_until_finished(container_id, timeout=60, interval=3):
     """Poll an Instagram media container until Meta finishes processing it."""
     deadline = time.time() + timeout
@@ -22,7 +28,7 @@ def _wait_until_finished(container_id, timeout=60, interval=3):
             params={"fields": "status_code", "access_token": _access_token()},
             timeout=30,
         )
-        response.raise_for_status()
+        _check(response)
         status = response.json().get("status_code")
         if status == "FINISHED":
             return
@@ -42,7 +48,7 @@ def post_to_instagram(image_urls, caption):
             data={"image_url": image_urls[0], "caption": caption, "access_token": token},
             timeout=30,
         )
-        response.raise_for_status()
+        _check(response)
         container_id = response.json()["id"]
         _wait_until_finished(container_id)
     else:
@@ -53,7 +59,7 @@ def post_to_instagram(image_urls, caption):
                 data={"image_url": url, "is_carousel_item": "true", "access_token": token},
                 timeout=30,
             )
-            response.raise_for_status()
+            _check(response)
             child_id = response.json()["id"]
             _wait_until_finished(child_id)
             child_ids.append(child_id)
@@ -68,7 +74,7 @@ def post_to_instagram(image_urls, caption):
             },
             timeout=30,
         )
-        response.raise_for_status()
+        _check(response)
         container_id = response.json()["id"]
         _wait_until_finished(container_id)
 
@@ -77,7 +83,7 @@ def post_to_instagram(image_urls, caption):
         data={"creation_id": container_id, "access_token": token},
         timeout=30,
     )
-    response.raise_for_status()
+    _check(response)
     return response.json()["id"]
 
 
@@ -92,7 +98,7 @@ def post_to_facebook(image_urls, caption):
             data={"url": url, "published": "false", "access_token": token},
             timeout=30,
         )
-        response.raise_for_status()
+        _check(response)
         photo_ids.append(response.json()["id"])
 
     response = requests.post(
@@ -106,5 +112,5 @@ def post_to_facebook(image_urls, caption):
         },
         timeout=30,
     )
-    response.raise_for_status()
+    _check(response)
     return response.json()["id"]
