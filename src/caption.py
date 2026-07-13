@@ -1,11 +1,11 @@
-"""Social media caption generation via Groq (Llama 3.3 70B)."""
+"""Social media caption generation via OpenRouter (Llama 3.3 70B, free tier)."""
 
 import os
 
 import requests
 
-GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-MODEL = "llama-3.3-70b-versatile"
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+MODEL = "meta-llama/llama-3.3-70b-instruct:free"
 
 PROMPT_TEMPLATE = """THE HomeShare facilitates homesharing arrangements, which are made up of two parties ( a sharer- a younger person (21 yo min) who needs an accommodation and needs to provide 10 hours per week of companionship and support. The older person, the householder, needs to live in their own house with some extra help from the sharer. so it's a mutually beneficial arrangement where everybody wins.
 Consider this Instagram listing:
@@ -35,7 +35,7 @@ Description:
 
 
 def generate_caption(listing):
-    api_key = os.environ["GROQ_API_KEY"]
+    api_key = os.environ["OPENROUTER_API_KEY"]
     prompt = PROMPT_TEMPLATE.format(
         title=listing["title"],
         location=listing["location"],
@@ -45,8 +45,12 @@ def generate_caption(listing):
     )
 
     response = requests.post(
-        GROQ_URL,
-        headers={"Authorization": f"Bearer {api_key}"},
+        OPENROUTER_URL,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "HTTP-Referer": "https://github.com/raymcdhub/social-distribution-engine",
+            "X-Title": "THE HomeShare Social Distribution Engine",
+        },
         json={
             "model": MODEL,
             "messages": [{"role": "user", "content": prompt}],

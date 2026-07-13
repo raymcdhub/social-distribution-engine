@@ -11,7 +11,8 @@ listings every 4 days, and stops reposting listings that have been taken down.
 **The site is not WordPress.** `thehomeshare.ie` is an Eleventy static site backed by
 Sanity CMS (project `gs4j2lbq`, dataset `production`). There's no RSS feed to poll —
 instead, `src/sanity_client.py` queries Sanity's public Content API directly with a
-GROQ query, the same way the site's own build process does. This gives structured data
+GROQ query (Sanity's query language — unrelated to the Groq AI inference company
+below), the same way the site's own build process does. This gives structured data
 (title, location, programme, gender, full description, image URLs) with no HTML
 scraping and no auth token needed (the dataset is public-read).
 
@@ -20,8 +21,8 @@ scraping and no auth token needed (the dataset is public-read).
 - **First run bootstraps**: seeds the database with every listing currently live,
   marked as already-posted, without sending anything — otherwise go-live would post
   all existing listings at once. After that, only genuinely new listings get posted.
-- For each new listing: generates a caption via Groq (Llama 3.3 70B) using the exact
-  prompt/template in `src/caption.py`, transforms its images to Instagram's 4:5 ratio
+- For each new listing: generates a caption via OpenRouter (Llama 3.3 70B, free tier)
+  using the exact prompt/template in `src/caption.py`, transforms its images to Instagram's 4:5 ratio
   via Cloudinary (`src/images.py`, fetch-transform — no image bytes stored), posts a
   carousel to Instagram and a multi-photo post to Facebook (`src/meta.py`), and saves
   the listing to `data/homeshare.db`.
@@ -46,7 +47,10 @@ Runs once daily, in this order so a listing removed today is never reposted toda
 ## Setup
 
 1. Add these repository secrets (Settings → Secrets and variables → Actions):
-   - `GROQ_API_KEY`
+   - `OPENROUTER_API_KEY` — from https://openrouter.ai/keys. The `meta-llama/llama-3.3-70b-instruct:free`
+     model used by default costs nothing, but is rate-limited on OpenRouter's free
+     tier; if you hit limits, swap the `MODEL` constant in `src/caption.py` for a
+     paid model.
    - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
    - `META_ACCESS_TOKEN` — long-lived Page access token with `instagram_basic`,
      `instagram_content_publish`, `pages_read_engagement`, `pages_manage_posts`.
@@ -74,7 +78,7 @@ Runs once daily, in this order so a listing removed today is never reposted toda
 
 ```bash
 pip install -r requirements.txt
-export GROQ_API_KEY="..."
+export OPENROUTER_API_KEY="..."
 export CLOUDINARY_CLOUD_NAME="..." CLOUDINARY_API_KEY="..." CLOUDINARY_API_SECRET="..."
 export META_ACCESS_TOKEN="..." META_PAGE_ID="..." META_IG_USER_ID="..."
 export RESEND_API_KEY="..." EMAIL_TO="..."
@@ -82,7 +86,7 @@ export RESEND_API_KEY="..." EMAIL_TO="..."
 # Bootstraps data/homeshare.db on first run (no posts sent)
 python scripts/check_new_listings.py
 
-# Dry run: scrapes real data, calls Groq + Cloudinary, but skips posting/DB writes
+# Dry run: scrapes real data, calls OpenRouter + Cloudinary, but skips posting/DB writes
 python scripts/check_new_listings.py --dry-run
 
 # Test daily maintenance (safe to run repeatedly)
