@@ -67,11 +67,12 @@ since twice a day tolerates GitHub's usual scheduling jitter fine (unlike a tigh
    what keeps the whole thing free and immune to billing issues.
 2. Add these repository secrets (Settings → Secrets and variables → Actions):
    - `OPENROUTER_API_KEY` — from https://openrouter.ai/keys. Defaults to
-     `openai/gpt-oss-120b:free` (set in `src/caption.py`). **Free OpenRouter models
-     are typically time-limited promotional listings, not permanent** — the original
-     choice (`meta-llama/llama-3.3-70b-instruct:free`) was retired in July 2026 after
-     a few weeks of use. When the current default is retired, either edit
-     `DEFAULT_MODEL` in `src/caption.py`, or set the optional repository **variable**
+     `nvidia/nemotron-3-super-120b-a12b:free` (set in `src/caption.py`). **Free
+     OpenRouter models are typically time-limited promotional listings, not
+     permanent** — two previous defaults (`meta-llama/llama-3.3-70b-instruct:free`,
+     then `openai/gpt-oss-120b:free`) were both retired within weeks of use. When the
+     current default is retired, either edit `DEFAULT_MODEL` in `src/caption.py`, or
+     set the optional repository **variable**
      (Settings → Secrets and variables → Actions → *Variables* tab, not Secrets)
      `OPENROUTER_MODEL` to override it without a code change. Check
      https://openrouter.ai/models?max_price=0 for current free options.
