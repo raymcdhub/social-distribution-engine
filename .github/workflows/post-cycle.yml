@@ -1,12 +1,11 @@
-name: Check new HomeShare listings
+name: HomeShare social post cycle
 
 on:
-  repository_dispatch:
-    types: [check-new-listings]
   schedule:
-    # Backup only — see README. Primary trigger is an external cron service
-    # calling repository_dispatch every ~10 minutes.
-    - cron: "37 * * * *"
+    # Twice a day, 12 hours apart. Each run posts exactly one opportunity —
+    # see scripts/post_cycle.py for the round-robin priority order.
+    - cron: "0 9 * * *"
+    - cron: "0 21 * * *"
   workflow_dispatch: {}
 
 concurrency:
@@ -17,7 +16,7 @@ permissions:
   contents: write
 
 jobs:
-  check:
+  post:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repo
@@ -31,7 +30,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run new-listing check
+      - name: Run post cycle
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
@@ -44,7 +43,7 @@ jobs:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
-        run: python scripts/check_new_listings.py
+        run: python scripts/post_cycle.py
 
       - name: Commit updated state
         run: |

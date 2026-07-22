@@ -67,6 +67,7 @@ def fetch_listings():
                 "location": item.get("location"),
                 "programme": item.get("programme") or "HomeSharing",
                 "gender": item.get("gender") or "Either",
+                "date_listed": item.get("dateListed") or "",
                 "description": _plain_text(item.get("description")),
                 "images": (item.get("images") or [])[:3],
             }

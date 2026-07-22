@@ -55,6 +55,34 @@ def get_available(conn):
     return [dict(row) for row in rows]
 
 
+def get_pending_available(conn):
+    """Available listings with an incomplete post (e.g. Instagram succeeded,
+    Facebook failed on a prior cycle) — always finished before anything new
+    is started, in the order they were first inserted."""
+    rows = conn.execute(
+        """
+        SELECT * FROM listings
+        WHERE available = 1 AND (ig_posted = 0 OR fb_posted = 0)
+        ORDER BY rowid ASC
+        """
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_next_repost(conn):
+    """The available, fully-posted listing that's least recently posted —
+    the next one due in the round-robin rotation."""
+    row = conn.execute(
+        """
+        SELECT * FROM listings
+        WHERE available = 1 AND ig_posted = 1 AND fb_posted = 1
+        ORDER BY last_posted_at ASC
+        LIMIT 1
+        """
+    ).fetchone()
+    return dict(row) if row else None
+
+
 def upsert_bootstrap(conn, listing):
     """Seed a listing as already-posted, without actually posting it."""
     timestamp = now_iso()

@@ -8,9 +8,9 @@ never actually reposted, but wrong the moment Algorithm 2 picks them up.
 
 This script finds any available listing with an empty stored caption,
 generates its real caption + Cloudinary-transformed images (without
-posting), and staggers `last_posted_at` across the past N days so
-Algorithm 2's daily run reposts them in batches over the next few days
-instead of all landing on the same day once they cross the 4-day mark.
+posting), and staggers `last_posted_at` across the past N days so they
+don't all land in the round-robin queue with an identical, tied timestamp
+— instead post_cycle.py works through them a few at a time as it rotates.
 
 Usage: python scripts/backfill_existing.py
 """
