@@ -44,7 +44,11 @@ female sharer | 21+ | Animal lover | Non-smoker
 💶 €355/month (in exchange for 10 hrs/week support & companionship)
 👉 Apply at https://thehomeshare.ie/find-a-home-online-application-form/
 
+#HomeShare #Homesharing #IntergenerationalLiving #Companionship #AffordableLiving #RoomAvailable #CoWicklow #Wicklow #Delgany #Greystones #Bray #DublinCommute
+
 Recreate this post using this new listing. If the new listing mentions Help4Housing, PLEASE DO ALSO. if the new listing mentions another price, PLEASE DO ALSO. Keep the format and tone, just change the relevant information about this new opportunity, just return the post caption ready to copy and paste. Note: the link never changes. The URL is always the same.
+
+End every caption with a single line of 10-14 hashtags, exactly like the example above. Keep the core tags every time (#HomeShare #Homesharing #IntergenerationalLiving #Companionship #AffordableLiving #RoomAvailable), then add location-specific tags derived from the new listing: the county (e.g. #CoWicklow and #Wicklow), the town/area named in the listing, one or two nearby larger towns mentioned in the description, and a commute tag (e.g. #DublinCommute) if the description mentions commuting to a city. No spaces inside a hashtag, no punctuation, put them all on one line as the last line of the caption.
 
 New listing:
 Title: {title}
