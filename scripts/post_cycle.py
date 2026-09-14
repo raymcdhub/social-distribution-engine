@@ -96,8 +96,18 @@ def repost(conn, row, dry_run):
         print("--- DRY RUN, would repost ---")
         return
     image_urls = json.loads(row["images"])
-    meta.post_to_instagram(image_urls, row["caption"])
-    meta.post_to_facebook(image_urls, row["caption"])
+    try:
+        meta.post_to_instagram(image_urls, row["caption"])
+        meta.post_to_facebook(image_urls, row["caption"])
+    except Exception:
+        # Still advance the rotation on failure (permanent or a one-off
+        # Meta/Cloudinary fetch blip) so a single bad listing can't wedge
+        # itself at the front of the queue and block every other listing's
+        # turn forever, the way Donegal Town and Ardrahan both did. It'll
+        # simply come back around for its next turn like everything else.
+        db.touch_last_posted(conn, row["id"])
+        conn.commit()
+        raise
     db.touch_last_posted(conn, row["id"])
     conn.commit()
     print(f"Reposted: {row['title']}")
