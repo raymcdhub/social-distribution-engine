@@ -19,6 +19,25 @@ def _check(response):
     return response
 
 
+def _warm(image_urls, timeout=20):
+    """Fetch each URL ourselves before handing it to Meta.
+
+    Our images are unsigned Cloudinary "fetch" URLs, which transform the
+    source image on demand the first time anything actually requests them.
+    That first (cold) fetch+crop+reformat can take a couple of seconds,
+    and Instagram's own media-download step times out and rejects the post
+    with a generic "Media download has failed" error rather than waiting -
+    seen in production on a repost whose URL hadn't been fetched by anyone
+    since it was first generated. Warming here trades a few seconds in
+    this job for Meta always hitting an already-cached copy.
+    """
+    for url in image_urls:
+        try:
+            requests.get(url, timeout=timeout)
+        except requests.RequestException as exc:
+            print(f"Warning: failed to pre-warm {url}: {exc}")
+
+
 def _wait_until_finished(container_id, timeout=60, interval=3):
     """Poll an Instagram media container until Meta finishes processing it."""
     deadline = time.time() + timeout
@@ -41,6 +60,7 @@ def _wait_until_finished(container_id, timeout=60, interval=3):
 def post_to_instagram(image_urls, caption):
     ig_user_id = os.environ["META_IG_USER_ID"]
     token = _access_token()
+    _warm(image_urls)
 
     if len(image_urls) == 1:
         response = requests.post(
@@ -90,6 +110,7 @@ def post_to_instagram(image_urls, caption):
 def post_to_facebook(image_urls, caption):
     page_id = os.environ["META_PAGE_ID"]
     token = _access_token()
+    _warm(image_urls)
 
     photo_ids = []
     for url in image_urls:
