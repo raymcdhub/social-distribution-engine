@@ -19,6 +19,44 @@ def _check(response):
     return response
 
 
+MEDIA_FETCH_ERROR_SUBCODE = 2207052  # "Media download has failed" on a valid URL
+MAX_MEDIA_FETCH_ATTEMPTS = 4
+MEDIA_FETCH_RETRY_WAIT_SECONDS = 8
+
+
+def _is_media_fetch_error(response):
+    if response.status_code != 400:
+        return False
+    try:
+        return response.json()["error"].get("error_subcode") == MEDIA_FETCH_ERROR_SUBCODE
+    except (ValueError, KeyError, TypeError):
+        return False
+
+
+def _post_fetching_media(url, data):
+    """POST a Graph API call where Meta itself fetches a remote image (the
+    image_url/url param). This step is intermittently flaky - it rejects a
+    perfectly reachable URL with "Media download has failed" roughly every
+    other post recently, on URLs that _warm() had just fetched successfully
+    seconds earlier and that curl fetches fine afterwards too. Not caused
+    by the image or by cold Cloudinary caching, so retry a few times with a
+    short wait before giving up; any other error (bad token, wrong scopes,
+    ...) still fails immediately as before."""
+    last_response = None
+    for attempt in range(1, MAX_MEDIA_FETCH_ATTEMPTS + 1):
+        response = requests.post(url, data=data, timeout=30)
+        if response.ok or not _is_media_fetch_error(response):
+            return _check(response)
+        last_response = response
+        if attempt < MAX_MEDIA_FETCH_ATTEMPTS:
+            print(
+                f"Meta media-fetch error on attempt {attempt}/{MAX_MEDIA_FETCH_ATTEMPTS}, "
+                f"retrying in {MEDIA_FETCH_RETRY_WAIT_SECONDS}s: {response.text}"
+            )
+            time.sleep(MEDIA_FETCH_RETRY_WAIT_SECONDS)
+    return _check(last_response)
+
+
 def _warm(image_urls, timeout=20):
     """Fetch each URL ourselves before handing it to Meta.
 
@@ -63,23 +101,19 @@ def post_to_instagram(image_urls, caption):
     _warm(image_urls)
 
     if len(image_urls) == 1:
-        response = requests.post(
+        response = _post_fetching_media(
             f"{GRAPH_URL}/{ig_user_id}/media",
-            data={"image_url": image_urls[0], "caption": caption, "access_token": token},
-            timeout=30,
+            {"image_url": image_urls[0], "caption": caption, "access_token": token},
         )
-        _check(response)
         container_id = response.json()["id"]
         _wait_until_finished(container_id)
     else:
         child_ids = []
         for url in image_urls:
-            response = requests.post(
+            response = _post_fetching_media(
                 f"{GRAPH_URL}/{ig_user_id}/media",
-                data={"image_url": url, "is_carousel_item": "true", "access_token": token},
-                timeout=30,
+                {"image_url": url, "is_carousel_item": "true", "access_token": token},
             )
-            _check(response)
             child_id = response.json()["id"]
             _wait_until_finished(child_id)
             child_ids.append(child_id)
@@ -114,12 +148,10 @@ def post_to_facebook(image_urls, caption):
 
     photo_ids = []
     for url in image_urls:
-        response = requests.post(
+        response = _post_fetching_media(
             f"{GRAPH_URL}/{page_id}/photos",
-            data={"url": url, "published": "false", "access_token": token},
-            timeout=30,
+            {"url": url, "published": "false", "access_token": token},
         )
-        _check(response)
         photo_ids.append(response.json()["id"])
 
     response = requests.post(
