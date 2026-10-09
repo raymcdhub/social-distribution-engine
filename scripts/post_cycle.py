@@ -12,8 +12,16 @@ Order of priority each run:
   3. Otherwise, repost whichever available listing was posted longest ago
      (round-robin) — this is what guarantees fairness over time.
 
-Before any of that, listings no longer live on Sanity are marked
-unavailable, so a delisted listing is never picked in step 1-3 above.
+Before any of that, listings no longer live on Sanity (unpublished, or
+marked "Shortlisting Complete") are marked unavailable, so they're never
+picked in step 1-3 above — and ones that have come back live are made
+available again, rejoining the rotation.
+
+A repost first checks whether the listing was edited on Sanity (e.g. a
+price change) since its caption was written, and regenerates it if so.
+Captions never carry a link (Meta caps organic link posts per Page) — the
+call to action is "Apply in bio". Instagram and Facebook are posted to
+independently, so one failing never stops the other.
 
 First run bootstraps: seeds the database with every listing currently live,
 marked as already-posted, without sending anything — otherwise go-live
@@ -37,30 +45,59 @@ import notify
 import sanity_client
 
 
-def mark_delisted(conn, live_ids, dry_run):
+POSTERS = {"ig": meta.post_to_instagram, "fb": meta.post_to_facebook}
+
+
+def sync_availability(conn, live_ids, dry_run):
     removed = 0
-    for row in db.get_available(conn):
-        if row["id"] not in live_ids:
-            print(f"No longer live, marking unavailable: {row['title']} ({row['id']})")
+    restored = 0
+    for listing_id in db.get_all_ids(conn):
+        row = db.get(conn, listing_id)
+        if row["available"] and listing_id not in live_ids:
+            print(f"No longer live, marking unavailable: {row['title']} ({listing_id})")
             removed += 1
             if not dry_run:
-                db.mark_unavailable(conn, row["id"])
+                db.mark_unavailable(conn, listing_id)
+        elif not row["available"] and listing_id in live_ids:
+            # Re-published, or reopened after shortlisting. Its old
+            # last_posted_at puts it near the front of the rotation.
+            print(f"Live again, marking available: {row['title']} ({listing_id})")
+            restored += 1
+            if not dry_run:
+                db.mark_available(conn, listing_id)
     if not dry_run:
         conn.commit()
     if removed:
         print(f"Marked {removed} listing(s) unavailable.")
+    if restored:
+        print(f"Marked {restored} listing(s) available again.")
+
+
+def _post_to_platforms(image_urls, listing_caption, platforms, on_posted=lambda name: None):
+    """Post to each platform in turn; a failure on one doesn't stop the
+    others. Raises after trying them all if any failed."""
+    listing_caption = caption_mod.apply_in_bio(listing_caption)
+    errors = []
+    for name in platforms:
+        try:
+            POSTERS[name](image_urls, listing_caption)
+        except Exception:
+            errors.append(f"{name} failed:\n{traceback.format_exc()}")
+            continue
+        on_posted(name)
+    if errors:
+        raise RuntimeError("\n".join(errors))
 
 
 def _post_to_pending_platforms(conn, listing_id, image_urls, listing_caption):
     row = db.get(conn, listing_id)
-    if not row["ig_posted"]:
-        meta.post_to_instagram(image_urls, listing_caption)
-        db.mark_posted(conn, listing_id, ig=True)
+
+    def on_posted(name):
+        db.mark_posted(conn, listing_id, **{name: True})
         conn.commit()
-    if not row["fb_posted"]:
-        meta.post_to_facebook(image_urls, listing_caption)
-        db.mark_posted(conn, listing_id, fb=True)
-        conn.commit()
+
+    pending = [name for name in POSTERS if not row[f"{name}_posted"]]
+    _post_to_platforms(image_urls, listing_caption, pending, on_posted)
 
 
 def finish_pending(conn, row, dry_run):
@@ -90,26 +127,41 @@ def post_new_listing(conn, listing, dry_run):
     print(f"Posted: {listing['title']}")
 
 
-def repost(conn, row, dry_run):
+def _is_edited(row, listing):
+    return row["title"] != listing["title"] or row["description"] != listing["description"]
+
+
+def refresh_if_edited(conn, row, listing):
+    """Regenerate a stored caption whose listing was edited on Sanity since
+    (e.g. a price drop), so a repost never advertises stale details."""
+    if not _is_edited(row, listing):
+        return row
+    print(f"Edited on Sanity since its caption was written, regenerating: {listing['title']}")
+    listing_caption = caption_mod.generate_caption(listing)
+    transformed_images = images.transform_all(listing["images"])
+    db.update_content(conn, listing, listing_caption, transformed_images)
+    conn.commit()
+    return db.get(conn, row["id"])
+
+
+def repost(conn, row, listing, dry_run):
     print(f"Reposting (round-robin): {row['title']} ({row['id']})")
     if dry_run:
+        if listing and _is_edited(row, listing):
+            print(f"Would regenerate caption first, now titled: {listing['title']}")
         print("--- DRY RUN, would repost ---")
         return
-    image_urls = json.loads(row["images"])
     try:
-        meta.post_to_instagram(image_urls, row["caption"])
-        meta.post_to_facebook(image_urls, row["caption"])
-    except Exception:
-        # Still advance the rotation on failure (permanent or a one-off
-        # Meta/Cloudinary fetch blip) so a single bad listing can't wedge
-        # itself at the front of the queue and block every other listing's
-        # turn forever, the way Donegal Town and Ardrahan both did. It'll
-        # simply come back around for its next turn like everything else.
+        row = refresh_if_edited(conn, row, listing)
+        _post_to_platforms(json.loads(row["images"]), row["caption"], POSTERS)
+    finally:
+        # Advance the rotation even on failure (permanent or a one-off
+        # Meta/Cloudinary/OpenRouter blip) so a single bad listing can't
+        # wedge itself at the front of the queue and block every other
+        # listing's turn forever, the way Donegal Town and Ardrahan both
+        # did. It'll simply come back around for its next turn.
         db.touch_last_posted(conn, row["id"])
         conn.commit()
-        raise
-    db.touch_last_posted(conn, row["id"])
-    conn.commit()
     print(f"Reposted: {row['title']}")
 
 
@@ -130,8 +182,8 @@ def main():
         print(f"Bootstrapped database with {len(live_listings)} existing listings (no posts sent).")
         return
 
-    live_ids = {listing["id"] for listing in live_listings}
-    mark_delisted(conn, live_ids, dry_run)
+    live_by_id = {listing["id"]: listing for listing in live_listings}
+    sync_availability(conn, set(live_by_id), dry_run)
 
     known_ids = db.get_all_ids(conn)
 
@@ -151,7 +203,7 @@ def main():
 
         next_repost = db.get_next_repost(conn)
         if next_repost:
-            repost(conn, next_repost, dry_run)
+            repost(conn, next_repost, live_by_id.get(next_repost["id"]), dry_run)
             return
 
         print("Nothing to post this cycle.")

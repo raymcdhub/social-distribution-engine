@@ -15,6 +15,11 @@ QUERY_URL = f"https://{PROJECT_ID}.api.sanity.io/v{API_VERSION}/data/query/{DATA
 
 APPLICATION_URL = "https://thehomeshare.ie/find-a-home-online-application-form/"
 
+# Listings still shown on the site but no longer taking applicants — treated
+# exactly like an unpublished listing, so they drop out of the rotation and
+# come back automatically if the status is set back to open.
+CLOSED_STATUSES = {"shortlisting_complete"}
+
 # _id is the permanent Sanity document id — stable across title/slug edits
 # (e.g. when a listing's price changes and its slug is regenerated), so it's
 # used as the primary key instead of the slug.
@@ -51,13 +56,16 @@ def _plain_text(description_blocks):
 
 
 def fetch_listings():
-    """Return all opportunity listings currently published on the site."""
+    """Return all opportunity listings currently published on the site and
+    still open to applicants (every programme, Help4Housing included)."""
     response = requests.get(QUERY_URL, params={"query": LISTINGS_QUERY}, timeout=30)
     response.raise_for_status()
     raw = response.json()["result"]
 
     listings = []
     for item in raw:
+        if item.get("status") in CLOSED_STATUSES:
+            continue
         listings.append(
             {
                 "id": item["id"],

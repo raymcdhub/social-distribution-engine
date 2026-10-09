@@ -156,3 +156,26 @@ def touch_last_posted(conn, listing_id):
 
 def mark_unavailable(conn, listing_id):
     conn.execute("UPDATE listings SET available = 0 WHERE id = ?", (listing_id,))
+
+
+def mark_available(conn, listing_id):
+    conn.execute("UPDATE listings SET available = 1 WHERE id = ?", (listing_id,))
+
+
+def update_content(conn, listing, caption, transformed_images):
+    """Replace a listing's stored content after it was edited on Sanity."""
+    conn.execute(
+        """
+        UPDATE listings
+        SET url = ?, title = ?, description = ?, images = ?, caption = ?
+        WHERE id = ?
+        """,
+        (
+            listing["url"],
+            listing["title"],
+            listing["description"],
+            json.dumps(transformed_images),
+            caption,
+            listing["id"],
+        ),
+    )

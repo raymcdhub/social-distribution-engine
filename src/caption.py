@@ -7,6 +7,7 @@ a code change.
 """
 
 import os
+import re
 import time
 
 import requests
@@ -42,11 +43,11 @@ female sharer | 21+ | Animal lover | Non-smoker
 🚙 15 min drive to Bray (~30 by bus)
 🛣️ Easy M11 access to Dublin & Wicklow
 💶 €355/month (in exchange for 10 hrs/week support & companionship)
-👉 Apply at https://thehomeshare.ie/find-a-home-online-application-form/
+📝 Apply in bio
 
 #HomeShare #Homesharing #IntergenerationalLiving #Companionship #AffordableLiving #RoomAvailable #CoWicklow #Wicklow #Delgany #Greystones #Bray #DublinCommute
 
-Recreate this post using this new listing. If the new listing mentions Help4Housing, PLEASE DO ALSO. if the new listing mentions another price, PLEASE DO ALSO. Keep the format and tone, just change the relevant information about this new opportunity, just return the post caption ready to copy and paste. Note: the link never changes. The URL is always the same.
+Recreate this post using this new listing. If the new listing mentions Help4Housing, PLEASE DO ALSO. if the new listing mentions another price, PLEASE DO ALSO. Keep the format and tone, just change the relevant information about this new opportunity, just return the post caption ready to copy and paste. Never include a link or URL: the call to action is always the exact line "📝 Apply in bio", as in the example.
 
 End every caption with a single line of 10-14 hashtags, exactly like the example above. Keep the core tags every time (#HomeShare #Homesharing #IntergenerationalLiving #Companionship #AffordableLiving #RoomAvailable), then add location-specific tags derived from the new listing: the county (e.g. #CoWicklow and #Wicklow), the town/area named in the listing, one or two nearby larger towns mentioned in the description, and a commute tag (e.g. #DublinCommute) if the description mentions commuting to a city. No spaces inside a hashtag, no punctuation, put them all on one line as the last line of the caption.
 
@@ -59,6 +60,25 @@ Gender preference: {gender}
 Description:
 {description}
 """
+
+
+APPLY_LINE = "📝 Apply in bio"
+# Meta now caps organic link posts per Page, so captions never carry links.
+_URL = re.compile(r"https?://|thehomeshare\.ie")
+
+
+def apply_in_bio(caption):
+    """Replace any line carrying a link — the old "👉 Apply at https://..."
+    line in every caption stored before this change, or a link a model
+    slipped in — with the "Apply in bio" line, keeping just one of those."""
+    lines = []
+    for line in caption.splitlines():
+        if _URL.search(line):
+            line = APPLY_LINE
+        if line.strip() == APPLY_LINE and APPLY_LINE in lines:
+            continue
+        lines.append(line.rstrip() if line.strip() == APPLY_LINE else line)
+    return "\n".join(lines)
 
 
 RETRY_STATUS_CODES = {429, 502, 503}
@@ -133,6 +153,6 @@ def generate_caption(listing):
     for model in models_to_try:
         result = _call_model(model, prompt, api_key)
         if result is not None:
-            return result
+            return apply_in_bio(result)
 
     raise RuntimeError(f"All OpenRouter models exhausted: {models_to_try}")

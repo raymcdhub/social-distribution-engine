@@ -4,8 +4,9 @@ Free, open-source rebuild of THE HomeShare's social media automation (previously
 n8n + Railway) using Python + GitHub Actions — €0/month, full visibility of the code.
 
 Twice a day, posts exactly one homesharing opportunity to Instagram and Facebook,
-rotating fairly through every currently-live listing, and stops posting listings that
-have been taken down.
+rotating fairly through every currently-live listing (HomeSharing and Help4Housing
+alike), and stops posting listings that have been taken down or marked "Shortlisting
+Complete".
 
 ## Why this needs to be a public repo
 
@@ -38,10 +39,12 @@ since twice a day tolerates GitHub's usual scheduling jitter fine (unlike a tigh
   marked as already-posted, without sending anything — otherwise go-live would post
   all existing listings at once. After that, every run does the following, in order:
 
-  1. **Mark delisted listings unavailable** — a listing is marked unavailable if its
+  1. **Sync availability with Sanity** — a listing is marked unavailable if its
      Sanity document id is no longer present in the live query results (i.e. it's been
-     unpublished/deleted). Simpler and more reliable than checking each listing URL for
-     a 404. This runs before posting so a listing removed today is never posted today.
+     unpublished/deleted, or its status is "Shortlisting Complete"). Simpler and more
+     reliable than checking each listing URL for a 404. This runs before posting so a
+     listing removed today is never posted today. A listing that comes back (re-published,
+     or reopened) is made available again and rejoins the rotation.
   2. **Finish any incomplete post from a prior run** — if Instagram succeeded but
      Facebook errored (or vice versa) last time, this run retries only the platform
      that failed, using the already-generated caption/images. Takes priority over
@@ -56,7 +59,12 @@ since twice a day tolerates GitHub's usual scheduling jitter fine (unlike a tigh
   4. **Otherwise, repost whichever available listing was posted longest ago** — this
      round-robin rule is what guarantees fairness: no listing gets a second turn until
      every other active listing has had its next turn too. Reuses the stored
-     caption/images (no regeneration).
+     caption/images, unless the listing's title or description was edited on Sanity
+     since (e.g. a price change) — then it regenerates them first.
+
+  Captions never contain a link — Meta caps organic link posts per Page — and use
+  "📝 Apply in bio" as the call to action instead. Instagram and Facebook are posted
+  to independently, so a failure on one never stops the other.
 
   Only one of steps 2/3/4 fires per run (whichever applies first), so exactly one
   opportunity is posted per run — two per day, every listing's turn always comes.

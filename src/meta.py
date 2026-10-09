@@ -23,14 +23,22 @@ MEDIA_FETCH_ERROR_SUBCODE = 2207052  # "Media download has failed" on a valid UR
 MAX_MEDIA_FETCH_ATTEMPTS = 4
 MEDIA_FETCH_RETRY_WAIT_SECONDS = 8
 
+MEDIA_NOT_READY_SUBCODE = 2207027  # "Media ID is not available" at media_publish
+MAX_PUBLISH_ATTEMPTS = 5
+PUBLISH_RETRY_WAIT_SECONDS = 15
+
+
+def _error_subcode(response):
+    if response.status_code != 400:
+        return None
+    try:
+        return response.json()["error"].get("error_subcode")
+    except (ValueError, KeyError, TypeError):
+        return None
+
 
 def _is_media_fetch_error(response):
-    if response.status_code != 400:
-        return False
-    try:
-        return response.json()["error"].get("error_subcode") == MEDIA_FETCH_ERROR_SUBCODE
-    except (ValueError, KeyError, TypeError):
-        return False
+    return _error_subcode(response) == MEDIA_FETCH_ERROR_SUBCODE
 
 
 def _post_fetching_media(url, data):
@@ -132,11 +140,28 @@ def post_to_instagram(image_urls, caption):
         container_id = response.json()["id"]
         _wait_until_finished(container_id)
 
-    response = requests.post(
-        f"{GRAPH_URL}/{ig_user_id}/media_publish",
-        data={"creation_id": container_id, "access_token": token},
-        timeout=30,
-    )
+    return _publish(ig_user_id, container_id, token)
+
+
+def _publish(ig_user_id, container_id, token):
+    """Publish a finished container. Instagram intermittently rejects this
+    with "Media ID is not available" even though the container reported
+    FINISHED moments earlier — it skipped Gouldavoher and Cashel's turns in
+    Sept 2026 — so give it a little longer before giving up."""
+    for attempt in range(1, MAX_PUBLISH_ATTEMPTS + 1):
+        response = requests.post(
+            f"{GRAPH_URL}/{ig_user_id}/media_publish",
+            data={"creation_id": container_id, "access_token": token},
+            timeout=30,
+        )
+        if response.ok or _error_subcode(response) != MEDIA_NOT_READY_SUBCODE:
+            break
+        if attempt < MAX_PUBLISH_ATTEMPTS:
+            print(
+                f"Instagram publish not ready on attempt {attempt}/{MAX_PUBLISH_ATTEMPTS}, "
+                f"retrying in {PUBLISH_RETRY_WAIT_SECONDS}s: {response.text}"
+            )
+            time.sleep(PUBLISH_RETRY_WAIT_SECONDS)
     _check(response)
     return response.json()["id"]
 
