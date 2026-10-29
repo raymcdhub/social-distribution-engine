@@ -214,6 +214,10 @@ def main():
             subject="HomeShare social post cycle failed",
             body=error,
         )
+        # Fail the Actions run too, so a broken cycle shows red on GitHub
+        # instead of a misleading green tick. The workflow still commits
+        # state afterwards (if: always()).
+        sys.exit(1)
 
 
 if __name__ == "__main__":

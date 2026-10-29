@@ -13,22 +13,26 @@ import time
 import requests
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-# nvidia/nemotron-3-super-120b-a12b:free — openai/gpt-oss-120b:free and
-# qwen/qwen3-next-80b-a3b-instruct:free (the previous default and first
-# fallback) were both pulled from the free tier (404 "no longer available
-# for free") as of July 2026. Check https://openrouter.ai/models?max_price=0
-# for current free options when this one is eventually retired too.
-DEFAULT_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
+# nvidia/nemotron-3-ultra-550b-a55b:free — nemotron-3-super-120b-a12b:free
+# (the previous default), gpt-oss-20b:free and nemotron-3-nano-30b-a3b:free
+# were all pulled from the free tier (404 "unavailable for free") as of
+# October 2026, wedging the post cycle for days. Check
+# https://openrouter.ai/models?max_price=0 for current free options when this
+# one is eventually retired too.
+DEFAULT_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
 # Free OpenRouter models share a global capacity pool per model, so a model
 # can be temporarily saturated upstream regardless of your own usage — seen
 # in practice on gpt-oss-120b:free during a 20-listing backfill. Falls back
 # to a different free model (spread across different underlying providers,
 # so one vendor pulling their free tier doesn't take out every fallback at
-# once) rather than failing outright.
+# once) rather than failing outright. openrouter/free is last: it's
+# OpenRouter's own router onto whichever free model is currently up, so it
+# survives individual models being retired.
 FALLBACK_MODELS = [
-    "openai/gpt-oss-20b:free",
     "google/gemma-4-31b-it:free",
-    "nvidia/nemotron-3-nano-30b-a3b:free",
+    "google/gemma-4-26b-a4b-it:free",
+    "thinkingmachines/inkling:free",
+    "openrouter/free",
 ]
 
 PROMPT_TEMPLATE = """THE HomeShare facilitates homesharing arrangements, which are made up of two parties ( a sharer- a younger person (21 yo min) who needs an accommodation and needs to provide 10 hours per week of companionship and support. The older person, the householder, needs to live in their own house with some extra help from the sharer. so it's a mutually beneficial arrangement where everybody wins.

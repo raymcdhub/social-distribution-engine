@@ -46,6 +46,9 @@ jobs:
         run: python scripts/post_cycle.py
 
       - name: Commit updated state
+        # Runs even when the post cycle failed, so availability syncs and
+        # rotation advances made before the failure are still saved.
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
