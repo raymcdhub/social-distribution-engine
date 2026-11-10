@@ -112,20 +112,15 @@ def _call_model(model, prompt, api_key):
     model was exhausted (caller should try the next fallback model)."""
     last_error = None
     for attempt in range(1, MAX_ATTEMPTS_PER_MODEL + 1):
-        response = requests.post(
-            OPENROUTER_URL,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "HTTP-Referer": "https://github.com/raymcdhub/social-distribution-engine",
-                "X-Title": "THE HomeShare Social Distribution Engine",
-            },
-            json={
-                "model": model,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.7,
-            },
-            timeout=60,
-        )
+        try:
+            response = _post(model, prompt, api_key)
+        except requests.RequestException as error:
+            # A timeout or dropped connection means this free model is
+            # saturated or hanging upstream; move on to the next fallback
+            # rather than burning more 60s timeouts on it (or, as on
+            # 2026-11-09, crashing the whole run).
+            last_error = f"OpenRouter request failed (model={model}): {error!r}"
+            break
         if response.ok:
             return response.json()["choices"][0]["message"]["content"].strip()
 
@@ -139,6 +134,23 @@ def _call_model(model, prompt, api_key):
 
     print(f"Giving up on {model}: {last_error}")
     return None
+
+
+def _post(model, prompt, api_key):
+    return requests.post(
+        OPENROUTER_URL,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "HTTP-Referer": "https://github.com/raymcdhub/social-distribution-engine",
+            "X-Title": "THE HomeShare Social Distribution Engine",
+        },
+        json={
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.7,
+        },
+        timeout=60,
+    )
 
 
 def generate_caption(listing):
